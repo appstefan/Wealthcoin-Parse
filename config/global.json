@@ -1,0 +1,17 @@
+{
+  "global": {
+    "parseVersion": "1.4.2"
+  },
+  "applications": {
+    "WealthCoin": {
+      "applicationId": "9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp",
+      "masterKey": "am4hcHa07w6TDN8Kt65xJ0gJPTeP8z4UHOF4nTRq"
+    },
+    "WealthCoinCloud": {
+      "link": "WealthCoin"
+    },
+    "_default": {
+      "link": "WealthCoin"
+    }
+  }
+}
