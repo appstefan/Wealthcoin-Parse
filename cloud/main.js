@@ -80,7 +80,7 @@ Parse.Cloud.afterSave("Transaction", function(request) {
   var amount = request.object.get("balanceChange");
   var address = request.object.get("address");
   Parse.Cloud.httpRequest({
-    url: 'https://1broker.com/api/v2/withdraw_from_addresses/?api_key=24727a21f9effcdce3363a712cfc1f66&from_addresses='+address+'&to_addresses=INSERT_1BROKER_ADDRESS&amounts='+amount+'&pin=wealthcoin',
+    url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
     success: function (d) {
       response.success(d.data);
     },
@@ -88,4 +88,14 @@ Parse.Cloud.afterSave("Transaction", function(request) {
       response.error();
     }
   });
+  //
+  // Parse.Cloud.httpRequest({
+  //   url: 'https://1broker.com/api/v2/withdraw_from_addresses/?api_key=24727a21f9effcdce3363a712cfc1f66&from_addresses='+address+'&to_addresses=1Fm3oZ1S1RFAQmoMoZ7N4anCmGtSESAs1o&amounts='+amount+'&pin=wealthcoin',
+  //   success: function (d) {
+  //     response.success(d.data);
+  //   },
+  //   error: function () {
+  //     response.error();
+  //   }
+  // });
 });
