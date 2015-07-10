@@ -82,15 +82,15 @@ Parse.Cloud.afterSave("Transaction", function(request) {
   Parse.Cloud.httpRequest({
     url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
     success: function (d) {
-      response.success(d.data);
+      console.log(d.response);
     },
     error: function () {
-      response.error();
+      response.error('error getting address');
     }
   });
   //
   // Parse.Cloud.httpRequest({
-  //   url: 'https://1broker.com/api/v2/withdraw_from_addresses/?api_key=24727a21f9effcdce3363a712cfc1f66&from_addresses='+address+'&to_addresses=1Fm3oZ1S1RFAQmoMoZ7N4anCmGtSESAs1o&amounts='+amount+'&pin=wealthcoin',
+  //   url: 'https://block.io/api/v2/withdraw_from_addresses/?api_key=4387-0e9d-63b7-d7f7&from_addresses='+address+'&to_addresses=1Fm3oZ1S1RFAQmoMoZ7N4anCmGtSESAs1o&amounts='+amount+'&pin=wealthcoin',
   //   success: function (d) {
   //     response.success(d.data);
   //   },
