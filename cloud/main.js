@@ -1,6 +1,6 @@
 // Use Parse.Cloud.define to define as many cloud functions as you want.
 // For example:
- 
+
 //Call Cloud functions with:
 //https://9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp:javascript-key%3DTi6naCnm6CVBjo5iAjljsV8ByduSBWnj2OSCF8ZL@api.parse.com/1/functions/ANY_FUNCTION
 
@@ -11,10 +11,10 @@ Parse.Cloud.afterSave("_User", function(request) {
       success: function (d) {
 
         var walletData = JSON.parse(d.text);
-  
+
         var WalletClass = Parse.Object.extend("Wallet");
         var wallet = new WalletClass();
-  
+
         // wallet.set("owner", request.user);
         wallet.set("publicKey", walletData.data.address);
         wallet.set("owner", request.object);
@@ -36,6 +36,10 @@ Parse.Cloud.afterSave("_User", function(request) {
         console.error("not working properly");
       }
     });
+});
+
+Parse.Cloud.define("get_broker_balance", function(request, response) {
+  
 });
 
 //Wait for deposit(s) to the wallets created above
@@ -71,24 +75,3 @@ Parse.Cloud.afterSave("_Transaction", function(request) {
 
 
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
