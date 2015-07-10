@@ -39,14 +39,22 @@ Parse.Cloud.afterSave("_User", function(request) {
 });
 
 Parse.Cloud.define("get_broker_balance", function(request, response) {
-  
+  Parse.Cloud.httpRequest({
+    url: 'https://1broker.com/api/v1/account/info.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
+    success: function (d) {
+      response.success(d.data);
+    },
+    error: function () {
+      response.error();
+    }
+  });
 });
 
 //Wait for deposit(s) to the wallets created above
 Parse.Cloud.define("transaction_received", function(request, response) {
     if (request.params.data) {
       console.log('transaction recieved with ' + request.params.data.confirmations + ' confirmations');
-      if (request.params.data.confirmations == 1) {
+      if (request.params.data.confirmations == 1) { //increase to 3!  block.io requires 3 confirmations
         console.log('saving transaction...');
 
         var address = request.params.data.address;
@@ -67,11 +75,17 @@ Parse.Cloud.define("transaction_received", function(request, response) {
 });
 
 //After transaction saved, forward to 1broker
-Parse.Cloud.afterSave("_Transaction", function(request) {
+Parse.Cloud.afterSave("Transaction", function(request) {
   console.log('transaction saved!');
-
-  var TransactionClass = Parse.Object.extend("Transaction");
-
-
-
+  var amount = request.object.get("balanceChange");
+  var address = request.object.get("address");
+  Parse.Cloud.httpRequest({
+    url: 'https://1broker.com/api/v2/withdraw_from_addresses/?api_key=24727a21f9effcdce3363a712cfc1f66&from_addresses='+address+'&to_addresses=INSERT_1BROKER_ADDRESS&amounts='+amount+'&pin=wealthcoin',
+    success: function (d) {
+      response.success(d.data);
+    },
+    error: function () {
+      response.error();
+    }
+  });
 });
