@@ -7,6 +7,10 @@
 //Make user a wallet.
 Parse.Cloud.afterSave("_User", function(request) {
   if (!request.object.existed()) {
+    Parse.Cloud.useMasterKey();
+    var user = request.object;
+    user.set("balance", parseInt(0));
+    user.save();
     //{"destination":"15qx9ug952GWGTNn7Uiv6vode4RcGrRemh","callback_url": "https://my.domain.com/callbacks/new-pay","token":"YOURTOKEN"}
     var paymentForwardJson = {
       'destination' : '2N2WUqQi3uAuFumfZynXSMozHDnCwCdvy7x',
@@ -68,10 +72,11 @@ Parse.Cloud.define("payment_received", function(request, response) {
 });
 
 Parse.Cloud.afterSave("Payment", function(request) {
+  Parse.Cloud.useMasterKey();
   var inputAddress = request.object.get("inputAddress");
   var value = request.object.get("value");
 
-  console.log('searching for matching paymentForward for address: ' + inputAddress);
+  console.log('searching for matching paymentForward for input address: ' + inputAddress);
 
   var paymentForward = Parse.Object.extend("PaymentForward");
   var query = new Parse.Query(paymentForward);
@@ -79,18 +84,11 @@ Parse.Cloud.afterSave("Payment", function(request) {
   query.include("user")
   query.find({
     success: function(results) {
-      alert("Successfully retrieved " + results.length + " paymentForwards. (should only be 1)");
-      // Do something with the returned Parse.Object values
       var object = results[0];
-      alert(object.id + ' - ' + object.get("user"));
       var user = object.get("user");
 
-      var currentBalance = user.get("balance");
-      if (!currentBalance) {
-        currentBalance = 0;
-        console.log('initialized zero balance');
-      }
-      var newBalance = currentBalance + value;
+      var currentBalance = parseInt(user.get("balance"));
+      var newBalance = parseInt(currentBalance + value);
       console.log('new balance: ' + newBalance);
       user.set("balance", newBalance);
       user.save();
