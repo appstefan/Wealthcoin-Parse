@@ -100,66 +100,7 @@ Parse.Cloud.afterSave("Payment", function(request) {
 });
 
 
-//Wait for deposit(s) to the wallets created above
-// Parse.Cloud.define("transaction_received", function(request, response) {
-//     // if (request.params.data) {
-//     var transactionData = request.params;
-//     // var outputs = transactionData.outputs;
-//     console.log('transaction received: ' + transactionData.confirmations);
-//     console.log('outputs: ' + JSON.stringify(transactionData.outputs, null, null));
-//
-//     response.success();
-// });
-
-// Parse.Cloud.define("broker_transaction_received", function(request, response) {
-//   if (request.params.data) {
-//     console.log('broker transaction received with ' + request.params.data.confirmations + ' confirmations');
-//     // if (request.params.data.confirmations == 1) { //increase to 3!  block.io requires 3 confirmations
-//     //
-//     // };
-//   };
-//   response.success();
-// });
-
-//After transaction saved, forward to 1broker
-// Parse.Cloud.afterSave("Transaction", function(request) {
-//   console.log('transaction saved!');
-//   var amount = request.object.get("balanceChange");
-//   console.log(amount);
-//   var address = request.object.get("address");
-//   console.log(address);
-//   Parse.Cloud.httpRequest({
-//     url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
-//     success: function (d) {
-//       var addressData = JSON.parse(d.text);
-//       var brokerAddress = addressData.response.bitcoin_address;
-//       console.log('current broker address: ' + brokerAddress);
-//       Parse.Cloud.httpRequest({
-//         url: 'https://block.io/api/v2/withdraw_from_addresses/?api_key=6cc7-b07d-b22b-f6d2&from_addresses='+address+'&to_addresses=' + brokerAddress + '&amounts='+amount+'&pin=wealthcoin',
-//         success: function (d) {
-//           console.log(d.data);
-//           Parse.Cloud.httpRequest({
-//             url: 'https://block.io/api/v2/create_notification/?api_key=6cc7-b07d-b22b-f6d2&type=address&address=' + brokerAddress + '&url=https://9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp:javascript-key%3DTi6naCnm6CVBjo5iAjljsV8ByduSBWnj2OSCF8ZL@api.parse.com/1/functions/broker_transaction_received',
-//             success: function (d) {
-//               console.log(d.text);
-//             },
-//             error: function () {
-//               console.error('error creating broker notification');
-//             }
-//           });
-//         },
-//         error: function () {
-//           console.error('error withdrawing from address');
-//         }
-//       });
-//     },
-//     error: function () {
-//       console.error('error getting address');
-//     }
-//   });
-// });
-
-
+//keep around for reference future use
 Parse.Cloud.define("get_broker_balance", function(request, response) {
   Parse.Cloud.httpRequest({
     url: 'https://1broker.com/api/v1/account/info.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
