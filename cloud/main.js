@@ -6,37 +6,161 @@
 
 //Make user a wallet.
 Parse.Cloud.afterSave("_User", function(request) {
+  if (!request.object.existed()) {
+    //{"destination":"15qx9ug952GWGTNn7Uiv6vode4RcGrRemh","callback_url": "https://my.domain.com/callbacks/new-pay","token":"YOURTOKEN"}
+    var paymentForwardJson = {
+      'destination' : '2N2WUqQi3uAuFumfZynXSMozHDnCwCdvy7x',
+      'callback_url' : 'https://9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp:javascript-key%3DTi6naCnm6CVBjo5iAjljsV8ByduSBWnj2OSCF8ZL@api.parse.com/1/functions/payment_received',
+      'token' : 'ba0c10cde294f1540ad5dbae854df7f9'
+    };
+    var paymentForwardJsonString = JSON.stringify(paymentForwardJson);
+
     Parse.Cloud.httpRequest({
-      url: 'https://block.io/api/v2/get_new_address/?api_key=4387-0e9d-63b7-d7f7',
-      success: function (d) {
+      url: 'http://api.blockcypher.com/v1/btc/test3/payments',
+      method: 'POST',
+      body: paymentForwardJsonString,
+      success: function (httpResponse) {
+        console.log('json: ' + httpResponse.text);
+        var paymentForwardData = JSON.parse(httpResponse.text);
 
-        var walletData = JSON.parse(d.text);
+        var PaymentForwardClass = Parse.Object.extend("PaymentForward");
+        var paymentForward = new PaymentForwardClass();
 
-        var WalletClass = Parse.Object.extend("Wallet");
-        var wallet = new WalletClass();
+        var forwardId = paymentForwardData["id"];
+        paymentForward.set("inputAddress", paymentForwardData.input_address);
+        paymentForward.set("destination", paymentForwardData.destination);
+        paymentForward.set("forwardId", forwardId);
+        paymentForward.set("token", paymentForwardData.token);
+        paymentForward.set("user", request.object);
+        paymentForward.save();
 
-        // wallet.set("owner", request.user);
-        wallet.set("publicKey", walletData.data.address);
-        wallet.set("owner", request.object);
-        //... add other wallet proerties
-        wallet.save();
-        console.log(walletData.data.address);
-
-        Parse.Cloud.httpRequest({
-          url: 'https://block.io/api/v2/create_notification/?api_key=4387-0e9d-63b7-d7f7&type=address&address=' + walletData.data.address + '&url=https://9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp:javascript-key%3DTi6naCnm6CVBjo5iAjljsV8ByduSBWnj2OSCF8ZL@api.parse.com/1/functions/transaction_received',
-          success: function (d) {
-            console.log(d.text);
-          },
-          error: function () {
-            console.error('error' + d.text);
-          }
-        });
+        console.log('payment forward created with input address: '+ paymentForwardData.input_address);
       },
-      error: function () {
-        console.error("not working properly");
+      error: function (httpResponse) {
+        console.error('error creating payment forward: ' + httpResponse);
       }
     });
+  }
 });
+
+Parse.Cloud.define("payment_received", function(request, response) {
+    var paymentData = request.params;
+    console.log('payment being forwarded with value: ' + paymentData["value"]);
+
+    var PaymentClass = Parse.Object.extend("Payment");
+    var payment = new PaymentClass();
+
+    var value = paymentData["value"];
+    var destination = paymentData["destination"];
+    var input_address = paymentData["input_address"];
+    var input_transaction_hash = paymentData["input_transaction_hash"];
+    var transaction_hash = paymentData["transaction_hash"];
+
+    payment.set("value", value);
+    payment.set("destination", destination);
+    payment.set("inputAddress", input_address);
+    payment.set("inputTransactionHash", input_transaction_hash);
+    payment.set("transactionHash", transaction_hash);
+    payment.save();
+
+    console.log('payment saved');
+    response.success();
+});
+
+Parse.Cloud.afterSave("Payment", function(request) {
+  var inputAddress = request.object.get("inputAddress");
+  var value = request.object.get("value");
+
+  console.log('searching for matching paymentForward for address: ' + inputAddress);
+
+  var paymentForward = Parse.Object.extend("PaymentForward");
+  var query = new Parse.Query(paymentForward);
+  query.equalTo("inputAddress", inputAddress);
+  query.include("user")
+  query.find({
+    success: function(results) {
+      alert("Successfully retrieved " + results.length + " paymentForwards. (should only be 1)");
+      // Do something with the returned Parse.Object values
+      var object = results[0];
+      alert(object.id + ' - ' + object.get("user"));
+      var user = object.get("user");
+
+      var currentBalance = user.get("balance");
+      if (!currentBalance) {
+        currentBalance = 0;
+        console.log('initialized zero balance');
+      }
+      var newBalance = currentBalance + value;
+      console.log('new balance: ' + newBalance);
+      user.set("balance", newBalance);
+      user.save();
+    },
+    error: function(error) {
+      alert("Error: " + error.code + " " + error.message);
+    }
+  });
+});
+
+
+//Wait for deposit(s) to the wallets created above
+// Parse.Cloud.define("transaction_received", function(request, response) {
+//     // if (request.params.data) {
+//     var transactionData = request.params;
+//     // var outputs = transactionData.outputs;
+//     console.log('transaction received: ' + transactionData.confirmations);
+//     console.log('outputs: ' + JSON.stringify(transactionData.outputs, null, null));
+//
+//     response.success();
+// });
+
+// Parse.Cloud.define("broker_transaction_received", function(request, response) {
+//   if (request.params.data) {
+//     console.log('broker transaction received with ' + request.params.data.confirmations + ' confirmations');
+//     // if (request.params.data.confirmations == 1) { //increase to 3!  block.io requires 3 confirmations
+//     //
+//     // };
+//   };
+//   response.success();
+// });
+
+//After transaction saved, forward to 1broker
+// Parse.Cloud.afterSave("Transaction", function(request) {
+//   console.log('transaction saved!');
+//   var amount = request.object.get("balanceChange");
+//   console.log(amount);
+//   var address = request.object.get("address");
+//   console.log(address);
+//   Parse.Cloud.httpRequest({
+//     url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
+//     success: function (d) {
+//       var addressData = JSON.parse(d.text);
+//       var brokerAddress = addressData.response.bitcoin_address;
+//       console.log('current broker address: ' + brokerAddress);
+//       Parse.Cloud.httpRequest({
+//         url: 'https://block.io/api/v2/withdraw_from_addresses/?api_key=6cc7-b07d-b22b-f6d2&from_addresses='+address+'&to_addresses=' + brokerAddress + '&amounts='+amount+'&pin=wealthcoin',
+//         success: function (d) {
+//           console.log(d.data);
+//           Parse.Cloud.httpRequest({
+//             url: 'https://block.io/api/v2/create_notification/?api_key=6cc7-b07d-b22b-f6d2&type=address&address=' + brokerAddress + '&url=https://9uH7wnXCApdzv4vtL38fN8w1F8YpWXzzqhx9ITtp:javascript-key%3DTi6naCnm6CVBjo5iAjljsV8ByduSBWnj2OSCF8ZL@api.parse.com/1/functions/broker_transaction_received',
+//             success: function (d) {
+//               console.log(d.text);
+//             },
+//             error: function () {
+//               console.error('error creating broker notification');
+//             }
+//           });
+//         },
+//         error: function () {
+//           console.error('error withdrawing from address');
+//         }
+//       });
+//     },
+//     error: function () {
+//       console.error('error getting address');
+//     }
+//   });
+// });
+
 
 Parse.Cloud.define("get_broker_balance", function(request, response) {
   Parse.Cloud.httpRequest({
@@ -48,54 +172,4 @@ Parse.Cloud.define("get_broker_balance", function(request, response) {
       response.error();
     }
   });
-});
-
-//Wait for deposit(s) to the wallets created above
-Parse.Cloud.define("transaction_received", function(request, response) {
-    if (request.params.data) {
-      console.log('transaction recieved with ' + request.params.data.confirmations + ' confirmations');
-      if (request.params.data.confirmations == 1) { //increase to 3!  block.io requires 3 confirmations
-        console.log('saving transaction...');
-
-        var address = request.params.data.address;
-        var balanceChange = request.params.data.balance_change;
-        var txid = request.params.data.txid;
-
-        var TransactionClass = Parse.Object.extend("Transaction");
-        var transaction = new TransactionClass();
-
-        transaction.set("balanceChange", balanceChange);
-        transaction.set("txID", txid);
-        transaction.set("address", address);
-        transaction.save();
-
-      };
-    };
-    response.success();
-});
-
-//After transaction saved, forward to 1broker
-Parse.Cloud.afterSave("Transaction", function(request) {
-  console.log('transaction saved!');
-  var amount = request.object.get("balanceChange");
-  var address = request.object.get("address");
-  Parse.Cloud.httpRequest({
-    url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
-    success: function (d) {
-      console.log(d.response);
-    },
-    error: function () {
-      response.error('error getting address');
-    }
-  });
-  //
-  // Parse.Cloud.httpRequest({
-  //   url: 'https://block.io/api/v2/withdraw_from_addresses/?api_key=4387-0e9d-63b7-d7f7&from_addresses='+address+'&to_addresses=1Fm3oZ1S1RFAQmoMoZ7N4anCmGtSESAs1o&amounts='+amount+'&pin=wealthcoin',
-  //   success: function (d) {
-  //     response.success(d.data);
-  //   },
-  //   error: function () {
-  //     response.error();
-  //   }
-  // });
 });
