@@ -144,7 +144,7 @@ Parse.Cloud.afterSave("Transaction", function(request) {
 
   if (confirmations === 3) {
     if (balanceChange > 0) {
-      console.log('forwarding to 1broker...');
+      console.log('getting latest broker address...');
       Parse.Cloud.httpRequest({
         method: 'GET',
         url: 'https://1broker.com/api/v1/account/bitcoindepositaddress.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
@@ -161,15 +161,20 @@ Parse.Cloud.afterSave("Transaction", function(request) {
                 console.log('broker address: ' + currentBrokerAddress + ' is deprecated. replacing with: ' + newBrokerAddress);
                 broker.set("address", newBrokerAddress);
                 broker.save();
+              } else {
+                console.log('broker address: '+ currentBrokerAddress + ' is up to date.');
               }
+              console.log('getting fee estimate...');
+              var maxFeeBalanceChange = (((balanceChange * 100000000)-(0.00100000 * 100000000)) / 100000000);
               Parse.Cloud.httpRequest({
                 method: 'POST',
-                url: 'https://block.io/api/v2/get_network_fee_estimate/?api_key='+blockApiKey+'&from_addresses='+ address +'&to_addresses='+ newBrokerAddress +'&amounts='+ balanceChange +'&pin=wealthcoin',
-                success: function (response) {
-                  var estimateData = JSON.parse(response.text);
+                url: 'https://block.io/api/v2/get_network_fee_estimate/?api_key='+blockApiKey+'&from_addresses='+ address +'&to_addresses='+ newBrokerAddress +'&amounts='+ maxFeeBalanceChange +'&pin=wealthcoin',
+                success: function (estimateResponse) {
+                  var estimateData = JSON.parse(estimateResponse.text);
                   var estimatedFee = estimateData.data.estimated_network_fee;
-                  var withdrawAmount = (((balanceChange * 1000000)-(estimatedFee * 1000000)) / 1000000);
-                  console.log('fee estimate: ' + estimatedFee + '| withdrawing: ' + withdrawAmount);
+                  console.log('fee estimate: ' + estimatedFee);
+                  var withdrawAmount = (((balanceChange * 100000000)-(estimatedFee * 100000000)) / 100000000);
+                  console.log('withdrawing: ' + withdrawAmount);
                   Parse.Cloud.httpRequest({
                     method: 'POST',
                     url: 'https://block.io/api/v2/withdraw_from_addresses/?api_key='+blockApiKey+'&from_addresses='+ address +'&to_addresses='+ newBrokerAddress +'&amounts='+ withdrawAmount +'&pin=wealthcoin',
@@ -197,22 +202,22 @@ Parse.Cloud.afterSave("Transaction", function(request) {
                       console.log('withdrawal created: ' + JSON.stringify(withdrawalData));
                     },
                     error: function (error) {
-                      console.error('error creating withdrawal' + error.text);
+                      console.error('error creating withdrawal: ' + error.text);
                     }
                   });
                 },
                 error: function (error) {
-                  console.error('error creating withdrawal' + error.text);
+                  console.error('error getting estimate: ' + error.text);
                 }
               });
             },
             error: function(error) {
-              alert("Error: " + error.code + " " + error.message);
+              alert("Error querying saved broker details: " + error.code + " " + error.message);
             }
           });
         },
         error: function (error) {
-          alert("Error: " + error.code + " " + error.message);
+          alert("Error getting address: " + error.code + " " + error.message);
         }
       });
     } else {
@@ -236,28 +241,26 @@ Parse.Cloud.afterSave("Transaction", function(request) {
             success: function(results) {
               var object = results[0];
               var user = object.get("user");
-
               var portfolioPointer = user.get("portfolio");
 
               portfolioPointer.fetch({
                 success: function(object) {
                   var portfolio = object;
-                  var stockRatio = portfolio.get("stockRatio");
-                  // var stockRatio = portfolio.get("stockRatio");
-                  // var stockRatio = portfolio.get("stockRatio");
-                  console.log('user: ' + user.get('username') + 'stockRatio: ' + stockRatio);
-                  // var buyRequest = {
-                  //   'stockRatio' : stockRatio,
-                  //   'total' : total
-                  // };
-                  // Parse.Cloud.run('perform_broker_buy', buyRequest, {
-                  //   success: function() {
-                  //
-                  //   },
-                  //   error: function(error) {
-                  //
-                  //   }
-                  // });
+                  var sp500Ratio = portfolio.get("sp500Ratio");
+                  var sp500Margin = ((((-(balanceChange)) * 100000000) * (sp500Ratio)) / 100000000);
+                  var sp500Request = {
+                    'margin' : sp500Margin,
+                    'symbol' : 'SP500',
+                    'userId' : user.id
+                  };
+                  Parse.Cloud.run('perform_broker_buy', sp500Request, {
+                    success: function() {
+                      console.log('winning');
+                    },
+                    error: function(error) {
+                      console.log('failing');
+                    }
+                  });
                 },
                 error: function(object, error) {
                   console.console.error('error fetching porfolio: ' + error.message);
@@ -278,19 +281,126 @@ Parse.Cloud.afterSave("Transaction", function(request) {
 });
 
 Parse.Cloud.define("perform_broker_buy", function(request, response) {
-  var stockMargin = ((request.params.total * request.params.stockRatio)/1000000);
-  console.log('stockMargin: ' + stockMargin);
-  // response.success();
+  var buyMargin = request.params.margin;
+  var buySymbol = request.params.symbol;
+  var userId = request.params.userId;
+
+  console.log('buying ' + buyMargin + 'BTC of ' + buySymbol + ' for user ' + userId);
 
   Parse.Cloud.httpRequest({
-    url: 'https://1broker.com/api/v1/order/create.php?symbol=SP500&margin=' + stockMargin + '&direction=long&leverage=1&order_type=Market&token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
-    success: function (d) {
+    url: 'https://1broker.com/api/v1/order/create.php?symbol=' + buySymbol + '&margin=' + buyMargin + '&direction=long&leverage=1&order_type=Market&token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
+    success: function (buyResponse) {
       console.log('buy success');
-      response.success(d.params);
+
+      var orderId = buyResponse.data.response.order_id;
+      var symbol = buyResponse.data.response.symbol;
+      var margin = buyResponse.data.response.margin;
+      var leverage = buyResponse.data.response.leverage;
+      var direction = buyResponse.data.response.direction;
+      var orderType = buyResponse.data.response.order_type;
+      var orderCreated = buyResponse.data.response.created;
+
+      var OrderClass = Parse.Object.extend('Order');
+      var order = new OrderClass();
+
+      order.set('orderId', orderId);
+      order.set('symbol', symbol);
+      order.set('margin', margin);
+      order.set('leverage', leverage);
+      order.set('direction', direction);
+      order.set('orderType', orderType);
+      order.set('orderCreated', orderCreated);
+      order.set('userId', userId);
+
+      order.save();
+      response.success();
     },
-    error: function (d) {
-      console.log('buy error');
-      response.error(d.params);
+    error: function (error) {
+      console.log('buy error: ' + error.text);
+      response.error();
+    }
+  });
+});
+
+Parse.Cloud.job("positions_update", function(request, response) {
+  console.log('positions updating...');
+  Parse.Cloud.httpRequest({
+    url: 'https://1broker.com/api/v1/position/list_open.php?token=24727a21f9effcdce3363a712cfc1f66&pretty=1',
+    success: function (positionsResponse) {
+      positionsResponse.data.response.forEach(function(item, index){
+        var position = item;
+        var positionId = position.position_id;
+        var status = position.status;
+        var symbol = position.symbol;
+        var margin = position.margin;
+        var leverage = position.leverage;
+        var direction = position.direction;
+        var entryPrice = position.entry_price;
+        var currentBid = position.current_bid;
+        var currentAsk = position.current_ask;
+        var profitLoss = position.profit_loss;
+        var profitLossPercent = position.profit_loss_percent;
+        var marketClose = position.market_close;
+        var stopLoss = position.stop_loss;
+        var takeProfit = position.take_profit;
+
+        var PositionClass = Parse.Object.extend('Position');
+        var query = new Parse.Query(PositionClass);
+        query.equalTo('positionId', positionId);
+        query.find({
+          success: function(results) {
+            if(results.length === 0) {
+              console.log('adding new position: ' + positionId);
+              var position = new PositionClass();
+              position.set('positionId', positionId);
+              position.set('status', status);
+              position.set('symbol', symbol);
+              position.set('margin', margin);
+              position.set('leverage', leverage);
+              position.set('direction', direction);
+              position.set('entryPrice', entryPrice);
+              position.set('currentBid', currentBid);
+              position.set('currentAsk', currentAsk);
+              position.set('profitLoss', profitLoss);
+              position.set('profitLossPercent', profitLossPercent);
+              position.set('marketClose', marketClose);
+              position.set('stopLoss', stopLoss);
+              position.set('takeProfit', takeProfit);
+              position.save();
+            } else {
+              console.log('updating existing position: ' + positionId);
+              var position = results[0];
+              position.set('status', status);
+              position.set('symbol', symbol);
+              position.set('margin', margin);
+              position.set('leverage', leverage);
+              position.set('direction', direction);
+              position.set('entryPrice', entryPrice);
+              position.set('currentBid', currentBid);
+              position.set('currentAsk', currentAsk);
+              position.set('profitLoss', profitLoss);
+              position.set('profitLossPercent', profitLossPercent);
+              position.set('marketClose', marketClose);
+              position.set('stopLoss', stopLoss);
+              position.set('takeProfit', takeProfit);
+              position.save();
+            };
+            if ((index+1) === positionsResponse.data.response.length) {
+              response.success();
+            };
+          },
+          error: function(error) {
+            alert("Error: " + error.code + " " + error.message);
+            if ((index+1) === positionsResponse.data.response.length) {
+              response.success();
+            };
+          }
+        });
+      });
+    },
+    error: function (error) {
+      console.log('update error: ' + error.text);
+      response.error();
     }
   });
 });
